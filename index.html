@@ -217,35 +217,58 @@ function parsePoule(wb, sheetName) {
   const pouleLetter = info[8] || sheetName.replace('Poule','');
   const veld        = info[10] || '';
 
-  // Matches: header at row index 9, data from 10 onward
+  // --- WEDSTRIJDEN LEZEN ---
   const matches = [];
-  for (let i = 10; i < rows.length; i++) {
+  // We kijken vanaf rij 10 tot maximaal rij 30 (genoeg voor elke poule)
+  for (let i = 10; i < Math.min(rows.length, 35); i++) {
     const r = rows[i];
-    if (!r || r[0] === null || r[0] === 'Team') break;
-    if (typeof r[0] !== 'number') continue;
+    
+    // Stop pas als we de tekst "Team" tegenkomen (begin van de stand) 
+    // of als de regel echt helemaal leeg is én de volgende ook.
+    if (!r || (r[0] === 'Team')) break; 
+    
+    // Als de regel leeg is of geen nummer heeft (bijv. wedstrijd 4 ontbreekt), overslaan maar NIET stoppen
+    if (r[0] === null || r[0] === "" || typeof r[0] !== 'number') continue;
+
     const s1 = r[9], s2 = r[11];
     const hasScore = s1 !== null && s1 !== '' && s2 !== null && s2 !== '';
+    
     matches.push({
       nr: r[0],
       start: fmtTime(r[1]),
-      home:  r[4]  || '',
-      away:  r[7]  || '',
+      home:  (r[4] || 'TBD').toString().trim(),
+      away:  (r[7] || 'TBD').toString().trim(),
       score1: hasScore ? s1 : null,
       score2: hasScore ? s2 : null,
       ref:   (r[12] || '').toString().trim(),
     });
   }
 
-  // Standings
+  // --- STAND LEZEN ---
   let hi = -1;
-  for (let i = 0; i < rows.length; i++) { if (rows[i] && rows[i][0] === 'Team') { hi = i; break; } }
+  // Zoek de start van de stand (de regel die begint met "Team")
+  for (let i = 0; i < rows.length; i++) { 
+    if (rows[i] && rows[i][0] === 'Team') { hi = i; break; } 
+  }
+  
   const teams = [];
   if (hi >= 0) {
-    for (let i = hi+1; i < rows.length; i++) {
-      const r = rows[i]; if (!r || !r[0]) break;
-      teams.push({ name: r[0], pts: n(r[14]), g: n(r[16]), w: n(r[17]), v: n(r[18]), gd: n(r[19]) });
+    for (let i = hi + 1; i < hi + 10; i++) { // Check max 10 teams per poule
+      const r = rows[i]; 
+      if (!r || !r[0] || r[0] === "") continue; // Sla lege regels in de stand over
+      if (r[0] === "Team") continue; // Beveiliging tegen dubbele headers
+      
+      teams.push({ 
+        name: r[0], 
+        pts: n(r[14]), 
+        g: n(r[16]), 
+        w: n(r[17]), 
+        v: n(r[18]), 
+        gd: n(r[19]) 
+      });
     }
-    teams.sort((a,b) => b.pts - a.pts);
+    // Sorteren op punten, dan op doelsaldo (gd)
+    teams.sort((a, b) => b.pts - a.pts || b.gd - a.gd);
   }
 
   return { name: `Poule ${pouleLetter}`, category, veld, teams, matches };
